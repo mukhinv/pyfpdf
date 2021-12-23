@@ -64,7 +64,7 @@ class FPDF(object):
         self.offsets = {}               # array of object offsets
         self.page = 0                   # current page number
         self.n = 2                      # current object number
-        self.buffer = ''                # buffer holding in-memory PDF
+        self.stream = BytesIO()         # stream holding in-memory PDF
         self.pages = {}                 # array containing pages and metadata
         self.state = 0                  # current document state
         self.fonts = {}                 # array of used fonts
@@ -144,6 +144,11 @@ class FPDF(object):
         self.set_compression(1)
         # Set default PDF version number
         self.pdf_version = '1.3'
+
+    @property
+    def buffer(self):
+        '''buffer holding in-memory PDF - backwards compatible'''
+        return self.stream.getvalue()
 
     @staticmethod
     def get_page_format(format, k):
@@ -1123,14 +1128,14 @@ class FPDF(object):
         if dest in ('I', 'D'):
             # Python < 3 writes byte data transparently without "buffer"
             stdout = getattr(sys.stdout, 'buffer', sys.stdout)
-            stdout.write(buffer)
+            stdout.write(self.buffer)
         elif dest=='F':
             #Save to local file
             with open(name,'wb') as f:
-                f.write(buffer)
+                f.write(self.buffer)
         elif dest=='S':
             #Return as a byte string
-            return buffer
+            return self.buffer
         else:
             self.error('Incorrect output destination: '+dest)
 
@@ -1232,7 +1237,7 @@ class FPDF(object):
             self._putstream(p)
             self._out('endobj')
         # Pages root
-        self.offsets[1] = len(self.buffer)
+        self.offsets[1] = self.stream.tell()
         self._out('1 0 obj')
         self._out('<</Type /Pages')
         kids = '/Kids ['
@@ -1636,7 +1641,7 @@ class FPDF(object):
         self._putfonts()
         self._putimages()
         #Resource dictionary
-        self.offsets[2]=len(self.buffer)
+        self.offsets[2] = self.stream.tell()
         self._out('2 0 obj')
         self._out('<<')
         self._putresourcedict()
@@ -1700,7 +1705,7 @@ class FPDF(object):
         self._out('>>')
         self._out('endobj')
         #Cross-ref
-        o=len(self.buffer)
+        o = self.stream.tell()
         self._out('xref')
         self._out('0 '+(str(self.n+1)))
         self._out('0000000000 65535 f ')
@@ -1983,11 +1988,14 @@ class FPDF(object):
             s = s.encode("latin1")    # default encoding (font name and similar)
         elif not isinstance(s, basestring):
             s = str(s)
+        s += "\n"
         if(self.state == 2):
-            self.pages[self.page]["content"] += (s + "\n")
+            self.pages[self.page]["content"] += s
         else:
-            self.buffer += (s + "\n")
-
+            if PY3K:
+                s = s.encode('latin1')
+            self.stream.write(s)
+            
     @check_page
     def interleaved2of5(self, txt, x, y, w=1.0, h=10.0):
         "Barcode I2of5 (numeric), adds a 0 if odd lenght"

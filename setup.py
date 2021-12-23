@@ -23,7 +23,7 @@ if os.path.exists("README.md"):
         warnings.warn("Exception when converting the README format: %s" % e)
 
 setup(name='fpdf',
-      version=fpdf.__version__,
+      version=str(fpdf.__version__)+'_performance_patch',
       description='Simple PDF generation for Python',
       long_description=long_desc,
       author='Olivier PLATHEY ported by Max',
